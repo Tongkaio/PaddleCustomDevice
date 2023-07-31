@@ -277,7 +277,7 @@ class TestProcessGroupFp32(unittest.TestCase):
         tensor_y = paddle.to_tensor(y)
         out_shape = list(self.shape)
         out_shape[0] *= 2
-        out = np.random.random(out_shape).astype(self.dtype)
+        out = np.zeros(out_shape).astype(self.dtype)
         tensor_out = paddle.to_tensor(out)
         if pg.rank() == 0:
             task = pg.all_gather(tensor_x, tensor_out)
