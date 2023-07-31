@@ -51,6 +51,72 @@ class TestProcessGroupFp32(unittest.TestCase):
         print("rank:", pg.rank(), "size:", pg.size(), "name:", pg.name())
         print("test new group api ok")
 
+        # test allgather
+        # rank 0
+        x = np.random.random(self.shape).astype(self.dtype)
+        y = np.random.random(self.shape).astype(self.dtype)
+        tensor_x = paddle.to_tensor(x)
+        tensor_y = paddle.to_tensor(y)
+        out_shape = list(self.shape)
+        out_shape[0] *= 2
+        out = np.random.random(out_shape).astype(self.dtype)
+        tensor_out = paddle.to_tensor(out)
+        if pg.rank() == 0:
+            task = pg.all_gather(tensor_x, tensor_out)
+            task.wait()
+            paddle.device.synchronize()
+        # rank 1
+        else:
+            tensor_out_list = [
+                paddle.empty_like(tensor_x),
+                paddle.empty_like(tensor_x),
+            ]
+            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
+            paddle.device.synchronize()
+            tensor_out = paddle.concat(tensor_out_list)
+        out_1 = paddle.slice(tensor_out, [0], [0], [out_shape[0] // 2])
+        out_2 = paddle.slice(tensor_out, [0], [out_shape[0] // 2], [out_shape[0]])
+        assert np.array_equal(tensor_x, out_1)
+        assert np.array_equal(tensor_y, out_2)
+        print("test allgather api ok\n")
+
+        if pg.rank() == 0:
+            task = pg.all_gather(tensor_x, tensor_out)
+            task.wait()
+            paddle.device.synchronize()
+        # rank 1
+        else:
+            tensor_out_list = []
+            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
+            paddle.device.synchronize()
+            tensor_out = paddle.concat(tensor_out_list)
+        out_1 = paddle.slice(tensor_out, [0], [0], [out_shape[0] // 2])
+        out_2 = paddle.slice(tensor_out, [0], [out_shape[0] // 2], [out_shape[0]])
+        assert np.array_equal(tensor_x, out_1)
+        assert np.array_equal(tensor_y, out_2)
+        print("test allgather api2 ok\n")
+
+        # test allgather with shape = []
+        # rank 0
+        x = np.random.random([]).astype(self.dtype)
+        y = np.random.random([]).astype(self.dtype)
+        tensor_x = paddle.to_tensor(x)
+        tensor_y = paddle.to_tensor(y)
+        tensor_out_list = []
+        if pg.rank() == 0:
+            task = dist.all_gather(tensor_out_list, tensor_x)
+            task.wait()
+            paddle.device.synchronize()
+        # rank 1
+        else:
+            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
+            paddle.device.synchronize()
+        out_1 = tensor_out_list[0]
+        out_2 = tensor_out_list[1]
+        assert np.array_equal(tensor_x, out_1)
+        assert np.array_equal(tensor_y, out_2)
+        print("test allgather api with shape [] ok\n")
+
         # test allreduce sum
         # rank 0
         x = np.random.random(self.shape).astype(self.dtype)
@@ -268,72 +334,6 @@ class TestProcessGroupFp32(unittest.TestCase):
             task.wait()
 
         print("test barrier api ok\n")
-
-        # test allgather
-        # rank 0
-        x = np.random.random(self.shape).astype(self.dtype)
-        y = np.random.random(self.shape).astype(self.dtype)
-        tensor_x = paddle.to_tensor(x)
-        tensor_y = paddle.to_tensor(y)
-        out_shape = list(self.shape)
-        out_shape[0] *= 2
-        out = np.random.random(out_shape).astype(self.dtype)
-        tensor_out = paddle.to_tensor(out)
-        if pg.rank() == 0:
-            task = pg.all_gather(tensor_x, tensor_out)
-            task.wait()
-            paddle.device.synchronize()
-        # rank 1
-        else:
-            tensor_out_list = [
-                paddle.empty_like(tensor_x),
-                paddle.empty_like(tensor_x),
-            ]
-            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
-            paddle.device.synchronize()
-            tensor_out = paddle.concat(tensor_out_list)
-        out_1 = paddle.slice(tensor_out, [0], [0], [out_shape[0] // 2])
-        out_2 = paddle.slice(tensor_out, [0], [out_shape[0] // 2], [out_shape[0]])
-        assert np.array_equal(tensor_x, out_1)
-        assert np.array_equal(tensor_y, out_2)
-        print("test allgather api ok\n")
-
-        if pg.rank() == 0:
-            task = pg.all_gather(tensor_x, tensor_out)
-            task.wait()
-            paddle.device.synchronize()
-        # rank 1
-        else:
-            tensor_out_list = []
-            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
-            paddle.device.synchronize()
-            tensor_out = paddle.concat(tensor_out_list)
-        out_1 = paddle.slice(tensor_out, [0], [0], [out_shape[0] // 2])
-        out_2 = paddle.slice(tensor_out, [0], [out_shape[0] // 2], [out_shape[0]])
-        assert np.array_equal(tensor_x, out_1)
-        assert np.array_equal(tensor_y, out_2)
-        print("test allgather api2 ok\n")
-
-        # test allgather with shape = []
-        # rank 0
-        x = np.random.random([]).astype(self.dtype)
-        y = np.random.random([]).astype(self.dtype)
-        tensor_x = paddle.to_tensor(x)
-        tensor_y = paddle.to_tensor(y)
-        tensor_out_list = []
-        if pg.rank() == 0:
-            task = dist.all_gather(tensor_out_list, tensor_x)
-            task.wait()
-            paddle.device.synchronize()
-        # rank 1
-        else:
-            task = dist.all_gather(tensor_out_list, tensor_y, sync_op=False)
-            paddle.device.synchronize()
-        out_1 = tensor_out_list[0]
-        out_2 = tensor_out_list[1]
-        assert np.array_equal(tensor_x, out_1)
-        assert np.array_equal(tensor_y, out_2)
-        print("test allgather api with shape [] ok\n")
 
         # test alltoall
         # rank 0
